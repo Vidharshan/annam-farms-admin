@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "annam-iyarkai"
+  },
+  "targets": {
+    "annam-iyarkai": {
+      "hosting": {
+        "admin": [
+          "annam-admin"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}
