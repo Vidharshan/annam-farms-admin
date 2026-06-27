@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
@@ -383,9 +384,13 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
       // 2. Parse Excel from bytes
       final importResult = await ExcelImportService.parsePackingSheet(fileBytes);
 
+      // 3. Generate summary of actual changes
+      final currentOrders = ref.read(allOrdersProvider).value ?? [];
+      final diffs = await ref.read(ordersRepositoryProvider).generateImportDiff(importResult, currentOrders);
+
       if (!context.mounted) return;
 
-      // 3. Show confirmation dialog
+      // 4. Show confirmation dialog
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -395,17 +400,52 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('📦 ${importResult.totalOrders} orders found'),
-              Text('🥬 ${importResult.totalProducts} products'),
-              Text('📝 ${importResult.updates.length} quantity updates'),
+              Text('📝 ${diffs.length} actual quantity changes'),
+              if (diffs.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Actual Changes:', style: TextStyle(fontWeight: FontWeight.bold)),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 18),
+                      tooltip: 'Copy all changes',
+                      onPressed: () {
+                        final textToCopy = diffs.map((d) => '• $d').join('\n');
+                        Clipboard.setData(ClipboardData(text: textToCopy));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Copied to clipboard!')),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 150),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: diffs.length,
+                    itemBuilder: (context, index) => SelectableText(
+                      '• ${diffs[index]}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ),
+              ],
               if (importResult.warnings.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('⚠️ Warnings:', style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold)),
-                ...importResult.warnings.take(5).map((w) => Padding(
+                ...importResult.warnings.take(3).map((w) => Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Text(w, style: const TextStyle(fontSize: 12, color: Colors.orange)),
                 )),
-                if (importResult.warnings.length > 5)
-                  Text('...and ${importResult.warnings.length - 5} more', style: const TextStyle(fontSize: 12, color: Colors.orange)),
+                if (importResult.warnings.length > 3)
+                  Text('...and ${importResult.warnings.length - 3} more', style: const TextStyle(fontSize: 12, color: Colors.orange)),
               ],
               const SizedBox(height: 16),
               const Text(

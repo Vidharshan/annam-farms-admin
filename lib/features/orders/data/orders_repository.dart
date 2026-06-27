@@ -91,6 +91,20 @@ class OrdersRepository {
             'delivery_cost': deliveryCost,
           })
           .eq('id', orderId);
+
+      // Also update the customer's permanent delivery cost in their profile
+      try {
+        final orderResponse = await _client.from('orders').select('user_id').eq('id', orderId).single();
+        final userId = orderResponse['user_id'];
+        if (userId != null) {
+          await _client.from('user_profiles').update({
+            'delivery_cost': deliveryCost
+          }).eq('user_id', userId);
+        }
+      } catch (e) {
+        print('Admin: Error updating user profile delivery cost: $e');
+      }
+
       print('Admin: Final amount updated successfully');
     } catch (e) {
       print('Admin: Error updating final amount: $e');
@@ -156,45 +170,143 @@ class OrdersRepository {
     }
   }
 
+  /// Compares the uploaded Excel sheet against the database and returns a list of human-readable changes.
+  Future<List<String>> generateImportDiff(ImportResult importResult, List<Order> currentOrders) async {
+    final diffs = <String>[];
+    if (importResult.updates.isEmpty) return diffs;
+
+    // Build orderId -> customerName map from UI state to avoid Supabase join errors
+    final orderCustomerMap = {
+      for (var order in currentOrders) order.id: order.customerName
+    };
+
+    // 1. Build product name → ID mapping
+    final productsResponse = await _client.from('products').select('id, name');
+    final productNameToId = <String, String>{};
+    for (var p in productsResponse as List) {
+      productNameToId[p['name'] as String] = p['id'] as String;
+    }
+
+    // 2. Fetch all existing items for the affected orders
+    final orderIds = importResult.updates.map((u) => u.orderId).toSet().toList();
+    
+    // Process in batches of 100 to avoid URL length limits
+    final existingItems = <Map<String, dynamic>>[];
+    for (var i = 0; i < orderIds.length; i += 100) {
+      final batch = orderIds.skip(i).take(100).toList();
+      final response = await _client
+          .from('order_items')
+          .select('order_id, product_id, ordered_qty, packed_qty')
+          .inFilter('order_id', batch);
+      existingItems.addAll(List<Map<String, dynamic>>.from(response as List));
+    }
+
+    // 3. Compare
+    for (var update in importResult.updates) {
+      final productId = productNameToId[update.productName];
+      if (productId == null) continue;
+
+      final existingItem = existingItems.where((item) => 
+        item['order_id'] == update.orderId && item['product_id'] == productId
+      ).firstOrNull;
+
+      if (existingItem != null) {
+        final currentQty = (existingItem['packed_qty'] as num?)?.toDouble() ?? 
+                           (existingItem['ordered_qty'] as num).toDouble();
+                           
+        if (currentQty != update.packedQty) {
+          final customerName = orderCustomerMap[update.orderId] ?? 'Order #${update.orderId.substring(0, 5)}';
+          diffs.add('$customerName: ${update.productName} (${currentQty.toStringAsFixed(1)} → ${update.packedQty.toStringAsFixed(1)})');
+        }
+      } else if (update.packedQty > 0) {
+        // NEW ITEM ADDED!
+        final customerName = orderCustomerMap[update.orderId] ?? 'Order #${update.orderId.substring(0, 5)}';
+        diffs.add('$customerName: ${update.productName} (0.0 → ${update.packedQty.toStringAsFixed(1)}) 🆕');
+      }
+    }
+
+    return diffs;
+  }
+
   /// Batch update packed quantities from an uploaded Excel sheet.
   /// 
   /// 1. Resolves product names → product IDs from the products table.
-  /// 2. Updates packed_qty for each matching order_item.
+  /// 2. Updates packed_qty for each matching order_item, or INSERTS if new.
   /// 3. Recalculates final_amount for each affected order.
   /// 4. Marks affected orders as 'packed'.
   Future<BatchUpdateResult> batchUpdatePackedQuantities(ImportResult importResult) async {
     try {
       print('Admin: Starting batch update for ${importResult.totalOrders} orders...');
 
-      // 1. Build product name → ID mapping
-      final productsResponse = await _client.from('products').select('id, name');
-      final productNameToId = <String, String>{};
+      // 1. Build product name → {id, price} mapping
+      final productsResponse = await _client.from('products').select('id, name, price');
+      final productInfo = <String, Map<String, dynamic>>{};
       for (var p in productsResponse as List) {
-        productNameToId[p['name'] as String] = p['id'] as String;
+        productInfo[p['name'] as String] = p;
       }
 
       int updatedItems = 0;
       int skippedItems = 0;
       final affectedOrderIds = <String>{};
 
-      // 2. Update each packed_qty
+      // 2. Fetch all existing items for the affected orders to know whether to insert or update
+      final orderIds = importResult.updates.map((u) => u.orderId).toSet().toList();
+      final existingItems = <Map<String, dynamic>>[];
+      for (var i = 0; i < orderIds.length; i += 100) {
+        final batch = orderIds.skip(i).take(100).toList();
+        final response = await _client
+            .from('order_items')
+            .select('order_id, product_id, ordered_qty, packed_qty')
+            .inFilter('order_id', batch);
+        existingItems.addAll(List<Map<String, dynamic>>.from(response as List));
+      }
+
+      // 3. Update or Insert each packed_qty
       for (var update in importResult.updates) {
-        final productId = productNameToId[update.productName];
-        if (productId == null) {
+        final product = productInfo[update.productName];
+        if (product == null) {
           print('Admin: Skipping unknown product: ${update.productName}');
           skippedItems++;
           continue;
         }
+        
+        final productId = product['id'] as String;
+        final existingItem = existingItems.where((item) => 
+          item['order_id'] == update.orderId && item['product_id'] == productId
+        ).firstOrNull;
 
         try {
-          await _client
-              .from('order_items')
-              .update({'packed_qty': update.packedQty})
-              .eq('order_id', update.orderId)
-              .eq('product_id', productId);
-
-          updatedItems++;
-          affectedOrderIds.add(update.orderId);
+          if (existingItem != null) {
+            final currentQty = (existingItem['packed_qty'] as num?)?.toDouble() ?? 
+                               (existingItem['ordered_qty'] as num).toDouble();
+            
+            // Only update if there is an actual change
+            if (currentQty != update.packedQty) {
+              await _client
+                  .from('order_items')
+                  .update({'packed_qty': update.packedQty})
+                  .eq('order_id', update.orderId)
+                  .eq('product_id', productId);
+              updatedItems++;
+              affectedOrderIds.add(update.orderId);
+            } else {
+              skippedItems++; // Same value, skip DB call
+            }
+          } else if (update.packedQty > 0) {
+            // Item wasn't ordered, but admin packed it anyway!
+            await _client.from('order_items').insert({
+              'order_id': update.orderId,
+              'product_id': productId,
+              'packed_qty': update.packedQty,
+              'ordered_qty': 0.0,
+              'price_at_order': product['price'],
+            });
+            updatedItems++;
+            affectedOrderIds.add(update.orderId);
+          } else {
+            // Didn't exist, and packed qty is 0. Ignore.
+            skippedItems++;
+          }
         } catch (e) {
           print('Admin: Error updating item (order: ${update.orderId}, product: ${update.productName}): $e');
           skippedItems++;
@@ -218,10 +330,15 @@ class OrdersRepository {
             finalAmount += (packedQty ?? orderedQty) * price;
           }
 
+          // Fetch and add the user's default delivery cost
+          final deliveryCost = await getUserDeliveryCost(orderId);
+          finalAmount += deliveryCost;
+
           await _client
               .from('orders')
               .update({
                 'final_amount': finalAmount,
+                'delivery_cost': deliveryCost,
                 'status': 'packed',
               })
               .eq('id', orderId);
