@@ -3,6 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/profiles_repository.dart';
 import '../../../shared/domain/profile_model.dart';
 import '../../../main.dart';
+class _CustomerSearchNotifier extends Notifier<String> {
+  @override
+  String build() => '';
+  void set(String val) => state = val;
+}
+final _customerSearchProvider = NotifierProvider<_CustomerSearchNotifier, String>(() => _CustomerSearchNotifier());
 
 class UsersScreen extends ConsumerWidget {
   const UsersScreen({super.key});
@@ -10,6 +16,7 @@ class UsersScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final profilesAsync = ref.watch(allProfilesProvider);
+    final searchQuery = ref.watch(_customerSearchProvider).toLowerCase();
 
     return Scaffold(
       appBar: AppBar(
@@ -26,12 +33,34 @@ class UsersScreen extends ConsumerWidget {
         ],
       ),
       body: profilesAsync.when(
-        data: (profiles) => ListView.separated(
-          padding: const EdgeInsets.all(16),
-          itemCount: profiles.length,
-          separatorBuilder: (_, __) => const Divider(),
-          itemBuilder: (context, index) {
-            final profile = profiles[index];
+        data: (profiles) {
+          final filteredProfiles = profiles.where((p) {
+            if (searchQuery.isEmpty) return true;
+            final name = (p.fullName ?? '').toLowerCase();
+            final phone = (p.phone ?? '').toLowerCase();
+            return name.contains(searchQuery) || phone.contains(searchQuery);
+          }).toList();
+
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: TextField(
+                  decoration: const InputDecoration(
+                    labelText: 'Search Customers (Name or Phone)',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (val) => ref.read(_customerSearchProvider.notifier).set(val),
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredProfiles.length,
+                  separatorBuilder: (_, __) => const Divider(),
+                  itemBuilder: (context, index) {
+                    final profile = filteredProfiles[index];
             return ListTile(
               leading: CircleAvatar(
                 child: Text(profile.fullName?.isNotEmpty == true ? profile.fullName![0] : '?'),
@@ -77,11 +106,15 @@ class UsersScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              onTap: () => _editProfile(context, ref, profile),
-            );
-          },
+                onTap: () => _editProfile(context, ref, profile),
+              );
+            },
+          ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
+      ],
+    );
+  },
+  loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, __) => Center(child: Text('Error: $err')),
       ),
     );

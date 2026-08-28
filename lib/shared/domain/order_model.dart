@@ -3,6 +3,7 @@ export 'order_item.dart';
 
 class Order {
   final String id;
+  final String userId;
   final DateTime createdAt;
   final String status; // 'pending', 'confirmed', 'delivered', 'cancelled'
   final String paymentStatus;
@@ -12,10 +13,12 @@ class Order {
   final String? customerArea;
   final String? customerPhone;
   final String? customerLandmark;
+  final bool isArchived;
   final List<OrderItem> items;
 
   Order({
     required this.id,
+    required this.userId,
     required this.createdAt,
     required this.status,
     required this.paymentStatus,
@@ -25,12 +28,14 @@ class Order {
     this.customerArea,
     this.customerPhone,
     this.customerLandmark,
+    this.isArchived = false,
     required this.items,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) {
     return Order(
       id: json['id'],
+      userId: json['user_id'] ?? '',
       createdAt: DateTime.parse(json['created_at']),
       status: json['status'],
       totalAmount: (json['final_amount'] ?? json['total_estimated_amount'] as num).toDouble(),
@@ -41,6 +46,7 @@ class Order {
       customerArea: json['profiles']?['area'],
       customerPhone: json['profiles']?['phone'],
       customerLandmark: json['profiles']?['landmark'],
+      isArchived: json['is_archived'] ?? false,
     );
   }
 }

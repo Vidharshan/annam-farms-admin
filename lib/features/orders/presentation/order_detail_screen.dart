@@ -193,6 +193,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   Widget _buildItemCard(item) {
     final orderedQty = item.orderedQuantity;
     final packedQty = packedQuantities[item.productId] ?? orderedQty.toDouble();
+    final amount = packedQty * item.pricePerUnit;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -218,6 +219,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                 if (packedQty != orderedQty)
                   Text('Packed: $packedQty ${item.unit}',
                       style: const TextStyle(fontSize: 12, color: Colors.blue)),
+                const SizedBox(height: 4),
+                Text(
+                  '₹${amount.toStringAsFixed(2)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
               ],
             ),
           ],
@@ -225,6 +231,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       ),
     );
   }
+
 
   Future<void> _updateStatus(BuildContext context, String newStatus) async {
     try {

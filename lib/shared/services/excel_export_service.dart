@@ -27,7 +27,16 @@ class ExcelExportService {
         allProductsSet.add(item.productName);
       }
     }
-    final allProducts = allProductsSet.toList()..sort();
+    final allProducts = allProductsSet.toList();
+    allProducts.sort((a, b) {
+      int indexA = _findSortIndex(a);
+      int indexB = _findSortIndex(b);
+      
+      if (indexA != -1 && indexB != -1) return indexA.compareTo(indexB);
+      if (indexA != -1) return -1;
+      if (indexB != -1) return 1;
+      return a.compareTo(b); // Alphabetical fallback
+    });
 
     // 1. Build Header Row
     final headerStyle = CellStyle(
@@ -40,6 +49,7 @@ class ExcelExportService {
     final metadataHeaders = [
       'Order ID',
       'Customer Name',
+      'Phone',
       'Order Date',
       'Area',
       'Landmark',
@@ -86,23 +96,27 @@ class ExcelExportService {
         ..cellStyle = nameStyle;
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 2, rowIndex: rowIndex))
-        ..value = TextCellValue(DateFormat('yyyy-MM-dd HH:mm').format(order.createdAt))
+        ..value = TextCellValue(order.customerPhone ?? 'N/A')
         ..cellStyle = dataStyle;
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 3, rowIndex: rowIndex))
+        ..value = TextCellValue(DateFormat('yyyy-MM-dd HH:mm').format(order.createdAt))
+        ..cellStyle = dataStyle;
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: rowIndex))
         ..value = TextCellValue(order.customerArea ?? 'N/A')
         ..cellStyle = nameStyle;
 
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: rowIndex))
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex))
         ..value = TextCellValue(order.customerLandmark ?? 'N/A')
         ..cellStyle = nameStyle;
 
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex))
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: rowIndex))
         ..value = DoubleCellValue(order.totalAmount)
         ..cellStyle = dataStyle;
 
       // #Veg Count
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: rowIndex))
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: rowIndex))
         ..value = IntCellValue(order.items.length)
         ..cellStyle = dataStyle;
 
@@ -114,7 +128,7 @@ class ExcelExportService {
           totalWeight += item.orderedQuantity;
         }
       }
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: rowIndex))
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: rowIndex))
         ..value = DoubleCellValue(totalWeight)
         ..cellStyle = dataStyle;
 
@@ -153,7 +167,7 @@ class ExcelExportService {
     }
 
     // 5. Save and Share
-    final bytes = excel.save();
+    final bytes = excel.encode();
     if (bytes != null) {
       final date = DateFormat('yyyy-MM-dd').format(DateTime.now());
       final fileName = 'Annam_Delivery_Summary_$date.xlsx';
@@ -178,5 +192,24 @@ class ExcelExportService {
         await Share.shareXFiles([XFile(filePath)], text: 'Annam Delivery Summary $date');
       }
     }
+  }
+
+  static int _findSortIndex(String productName) {
+    const customSortOrder = [
+      'Ghee', 'Coconut oil', 'Groundnut oil', 'Gingelly oil', 'Castor oil',
+      'Herbal salt', 'Aval', 'Rock salt', 'Jaggery', 'Nattusakkarai',
+      'Green gram', 'Black gram', 'Groundnut', 'Sivan samba', 'Thuyamalli rice',
+      'Yellaki banana', 'Poovan banana', 'Karpooravalli banana', 'Banganapalli', 'Pineapple', 'Watermelon',
+      'Seppankilangu', 'Pacha manjal', 'Mango ginger', 'Garlic', 'Potato', 'Beetroot', 'Carrot',
+      'Valaipoo', 'Valakkai', 'Valaithandu', 'Raw mango', 'Ashgourd', 'Beans', 'Bitter gourd', 'Bottle gourd',
+      'Brinjal (Green)', 'Brinjal (Purple)', 'Cabbage', 'Red Cabbage', 'Pappalikai', 'Chowchow',
+      'Lady\'s finger', 'ladies finger', 'Pumpkin', 'Sambar vellari', 'Agathi keerai', 'Red ponnakannai', 'Valaillai', 'Sundai',
+    ];
+    final normalized = productName.toLowerCase().replaceAll(' ', '');
+    for (int i = 0; i < customSortOrder.length; i++) {
+      final orderNorm = customSortOrder[i].toLowerCase().replaceAll(' ', '');
+      if (normalized.contains(orderNorm)) return i;
+    }
+    return -1;
   }
 }

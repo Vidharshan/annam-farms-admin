@@ -77,6 +77,12 @@ class _ProductsScreenState extends ConsumerState<ProductsScreen> {
             return p.name.toLowerCase().contains(_searchQuery);
           }).toList();
 
+          filteredProducts.sort((a, b) {
+            if (a.isActive && !b.isActive) return -1;
+            if (!a.isActive && b.isActive) return 1;
+            return a.name.compareTo(b.name);
+          });
+
           if (filteredProducts.isEmpty) {
             return const Center(child: Text('No products found'));
           }

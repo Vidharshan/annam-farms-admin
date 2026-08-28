@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/admin_theme.dart';
 import 'core/constants/app_secrets.dart';
 import 'features/inventory/presentation/products_screen.dart';
@@ -9,19 +10,31 @@ import 'features/dashboard/presentation/dashboard_screen.dart';
 import 'features/orders/presentation/orders_screen.dart';
 import 'features/orders/presentation/packing_screen.dart';
 import 'features/users/presentation/users_screen.dart';
+import 'features/reports/presentation/profit_reports_screen.dart';
 
 /// Global key so child screens can open the drawer from their own AppBars
 final GlobalKey<ScaffoldState> adminScaffoldKey = GlobalKey<ScaffoldState>();
 
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError();
+});
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  final prefs = await SharedPreferences.getInstance();
   
   await Supabase.initialize(
     url: AppSecrets.supabaseUrl,
     anonKey: AppSecrets.supabaseAnonKey,
   );
 
-  runApp(const ProviderScope(child: AdminApp()));
+  runApp(ProviderScope(
+    overrides: [
+      sharedPreferencesProvider.overrideWithValue(prefs),
+    ],
+    child: const AdminApp(),
+  ));
 }
 
 class AdminApp extends StatelessWidget {
@@ -54,6 +67,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     const OrdersScreen(),
     const PackingScreen(),
     const UsersScreen(),
+    const ProfitReportsScreen(),
     const Center(child: Text('Subscriptions - Coming Soon')),
   ];
 
@@ -63,6 +77,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _NavItem(icon: Icons.receipt_long_outlined, selectedIcon: Icons.receipt_long, label: 'Orders'),
     _NavItem(icon: Icons.local_shipping_outlined, selectedIcon: Icons.local_shipping, label: 'Packing'),
     _NavItem(icon: Icons.people_outline, selectedIcon: Icons.people, label: 'Customers'),
+    _NavItem(icon: Icons.bar_chart_outlined, selectedIcon: Icons.bar_chart, label: 'Reports'),
     _NavItem(icon: Icons.repeat_outlined, selectedIcon: Icons.repeat, label: 'Subscriptions'),
   ];
 

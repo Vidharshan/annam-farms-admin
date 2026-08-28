@@ -66,6 +66,7 @@ class OrdersRepository {
     required String orderId,
     required String productId,
     required double packedQty,
+    bool skipFinalAmountCalc = false,
   }) async {
     try {
       print('Admin: Updating order item - Order: $orderId, Product: $productId, Qty: $packedQty');
@@ -74,7 +75,35 @@ class OrdersRepository {
           .update({'packed_qty': packedQty})
           .eq('order_id', orderId)
           .eq('product_id', productId);
-      print('Admin: Order item updated successfully');
+          
+      if (skipFinalAmountCalc) return;
+
+      // Recalculate final amount without changing the order status
+      final items = await _client
+          .from('order_items')
+          .select('packed_qty, ordered_qty, price_at_order')
+          .eq('order_id', orderId);
+
+      double finalAmount = 0;
+      for (var item in items as List) {
+        final pq = (item['packed_qty'] as num?)?.toDouble();
+        final oq = (item['ordered_qty'] as num?)?.toDouble() ?? 0;
+        final price = (item['price_at_order'] as num?)?.toDouble() ?? 0;
+        finalAmount += (pq ?? oq) * price;
+      }
+
+      final deliveryCost = await getUserDeliveryCost(orderId);
+      finalAmount += deliveryCost;
+
+      await _client
+          .from('orders')
+          .update({
+            'final_amount': finalAmount,
+            'delivery_cost': deliveryCost,
+          })
+          .eq('id', orderId);
+          
+      print('Admin: Order item updated and final amount recalculated');
     } catch (e) {
       print('Admin: Error updating order item: $e');
       rethrow;
@@ -140,13 +169,78 @@ class OrdersRepository {
     }
   }
 
+  Future<void> deleteOrder(String orderId) async {
+    try {
+      print('Admin: Deleting order $orderId');
+      // Supabase should cascade delete order_items if set up correctly, 
+      // but just in case, we can delete them first.
+      await _client.from('order_items').delete().eq('order_id', orderId);
+      await _client.from('orders').delete().eq('id', orderId);
+      print('Admin: Order deleted successfully');
+    } catch (e) {
+      print('Admin: Error deleting order: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> archiveDeliveredOrders() async {
+    try {
+      print('Admin: Archiving all delivered and cancelled orders');
+      // Update all orders that are either delivered or cancelled and not yet archived
+      final response = await _client
+          .from('orders')
+          .update({'is_archived': true})
+          .inFilter('status', ['delivered', 'cancelled'])
+          .eq('is_archived', false)
+          .select();
+      final count = (response as List).length;
+      print('Admin: $count orders archived successfully');
+      return count;
+    } catch (e) {
+      print('Admin: Error archiving orders: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> unarchiveOrder(String orderId) async {
+    try {
+      print('Admin: Unarchiving order $orderId');
+      await _client
+          .from('orders')
+          .update({'is_archived': false})
+          .eq('id', orderId);
+      print('Admin: Order unarchived successfully');
+    } catch (e) {
+      print('Admin: Error unarchiving order: $e');
+      rethrow;
+    }
+  }
+
   Future<void> unlockAllOrders() async {
     try {
       print('Admin: Unlocking all processing orders');
+      // 1. Update all processing orders to is_editable = true
       await _client
           .from('orders')
           .update({'is_editable': true})
           .eq('status', 'processing');
+
+      // 2. Also update the latest non-cancelled order to make sure the system unlocks
+      final latest = await _client
+          .from('orders')
+          .select('id')
+          .neq('status', 'cancelled')
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+      
+      if (latest != null) {
+        await _client
+            .from('orders')
+            .update({'is_editable': true})
+            .eq('id', latest['id']);
+      }
+
       print('Admin: All orders unlocked successfully');
     } catch (e) {
       print('Admin: Error unlocking orders: $e');
@@ -158,12 +252,14 @@ class OrdersRepository {
     try {
       final result = await _client
           .from('orders')
-          .select('id')
-          .eq('status', 'processing')
-          .eq('is_editable', false)
-          .limit(1);
+          .select('is_editable')
+          .neq('status', 'cancelled')
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
       
-      return (result as List).isNotEmpty;
+      if (result == null) return false;
+      return result['is_editable'] == false;
     } catch (e) {
       print('Admin: Error checking lock status: $e');
       return false;

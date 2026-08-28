@@ -515,14 +515,15 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
 
   Future<void> _markAsPacked(BuildContext context, Order order) async {
     try {
-      // Update packed quantities per item
-      for (var item in order.items) {
-        await ref.read(ordersRepositoryProvider).updateOrderItem(
+      // Update packed quantities per item in parallel
+      await Future.wait(order.items.map((item) {
+        return ref.read(ordersRepositoryProvider).updateOrderItem(
           orderId: order.id,
           productId: item.productId,
           packedQty: packedQuantities[order.id]![item.productId]!,
+          skipFinalAmountCalc: true,
         );
-      }
+      }));
       
       // Calculate items total based on packed quantities
       double itemsTotal = 0;

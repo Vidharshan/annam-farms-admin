@@ -1,0 +1,22 @@
+Exploring the WhatsApp Business Cloud API is an excellent choice. It is far more reliable than Web Push notifications, and since almost everyone in India uses WhatsApp, your customers are guaranteed to see the payment reminder immediately.
+
+Here is how the architecture would work for Annam Farms:
+
+The Trigger: Inside your Admin dashboard, we add a simple "Send Payment Reminder" button on orders with pending dues (or we can automate it so it sends automatically when you mark an order as "Delivered").
+The Backend (Supabase): When triggered, your app calls a secure Supabase Edge Function.
+The WhatsApp API: That Edge Function takes the customer's phone number and order details, and securely asks Meta's WhatsApp Cloud API to send a message.
+The Delivery: The customer receives an official WhatsApp message from "Annam Natural Farms" that looks something like this:
+"Hello [Name], your order #[Order ID] has been successfully packed! Your total pending bill is ₹[Amount]. Please complete your payment here: [Link]"
+
+What you need to do to set this up:
+Because WhatsApp is tightly regulated to prevent spam, you (the business owner) must create the account. I cannot create it for you, but I can write all the code to connect your app to it.
+
+If you want to proceed, here are the exact steps you need to take:
+
+Go to the Meta for Developers portal: developers.facebook.com and log in with your Facebook account.
+Create an App: Click "My Apps" -> "Create App". Select "Other" -> "Business".
+Add WhatsApp: Once the app is created, scroll down to the "Add products to your app" section and set up WhatsApp.
+Get your Temporary Credentials: Meta will give you a "Temporary Access Token", a "Phone Number ID", and a test phone number.
+Once you have those credentials, just paste them here! I will immediately write a Supabase Edge Function that uses those keys to send WhatsApp messages directly to your customers' phones.
+
+Does this sound like a plan, or do you have any questions about the WhatsApp API?
