@@ -68,7 +68,21 @@ class ExcelImportService {
 
     // Product names start from column index 2
     final productNames = <int, String>{};
-    final ignoreColumns = {'order date', 'area', 'landmark', 'total amount', '#veg count', 'total weight (kg)'};
+    final ignoreColumns = {
+      'order date',
+      'door / floor no',
+      'door no',
+      'address line 1',
+      'address line 2',
+      'door / flat',
+      'address',
+      'area',
+      'landmark',
+      'comments',
+      'total amount',
+      '#veg count',
+      'total weight (kg)'
+    };
     
     for (var i = 2; i < headerRow.length; i++) {
       final name = _cellToString(headerRow[i]);

@@ -100,6 +100,7 @@ class OrdersRepository {
           .update({
             'final_amount': finalAmount,
             'delivery_cost': deliveryCost,
+            'cashfree_order_id': null,
           })
           .eq('id', orderId);
           
@@ -118,6 +119,7 @@ class OrdersRepository {
           .update({
             'final_amount': finalAmount,
             'delivery_cost': deliveryCost,
+            'cashfree_order_id': null,
           })
           .eq('id', orderId);
 
@@ -436,6 +438,7 @@ class OrdersRepository {
                 'final_amount': finalAmount,
                 'delivery_cost': deliveryCost,
                 'status': 'packed',
+                'cashfree_order_id': null,
               })
               .eq('id', orderId);
 

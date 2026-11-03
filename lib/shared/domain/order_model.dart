@@ -13,7 +13,10 @@ class Order {
   final String? customerArea;
   final String? customerPhone;
   final String? customerLandmark;
+  final String? customerAddressLine1;
+  final String? customerAddressLine2;
   final bool isArchived;
+  final String? comments;
   final List<OrderItem> items;
 
   Order({
@@ -28,7 +31,10 @@ class Order {
     this.customerArea,
     this.customerPhone,
     this.customerLandmark,
+    this.customerAddressLine1,
+    this.customerAddressLine2,
     this.isArchived = false,
+    this.comments,
     required this.items,
   });
 
@@ -46,7 +52,10 @@ class Order {
       customerArea: json['profiles']?['area'],
       customerPhone: json['profiles']?['phone'],
       customerLandmark: json['profiles']?['landmark'],
+      customerAddressLine1: json['profiles']?['address_line1'],
+      customerAddressLine2: json['profiles']?['address_line2'],
       isArchived: json['is_archived'] ?? false,
+      comments: json['comments'] as String?,
     );
   }
 }

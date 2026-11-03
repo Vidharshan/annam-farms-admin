@@ -51,8 +51,11 @@ class ExcelExportService {
       'Customer Name',
       'Phone',
       'Order Date',
+      'Door / Floor No',
+      'Address Line 2',
       'Area',
       'Landmark',
+      'Comments',
       'Total Amount',
       '#Veg Count',
       'Total Weight (kg)'
@@ -104,19 +107,31 @@ class ExcelExportService {
         ..cellStyle = dataStyle;
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 4, rowIndex: rowIndex))
-        ..value = TextCellValue(order.customerArea ?? 'N/A')
+        ..value = TextCellValue(order.customerAddressLine1 ?? 'N/A')
         ..cellStyle = nameStyle;
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 5, rowIndex: rowIndex))
-        ..value = TextCellValue(order.customerLandmark ?? 'N/A')
+        ..value = TextCellValue(order.customerAddressLine2 ?? '')
         ..cellStyle = nameStyle;
 
       sheet.cell(CellIndex.indexByColumnRow(columnIndex: 6, rowIndex: rowIndex))
+        ..value = TextCellValue(order.customerArea ?? 'N/A')
+        ..cellStyle = nameStyle;
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: rowIndex))
+        ..value = TextCellValue(order.customerLandmark ?? 'N/A')
+        ..cellStyle = nameStyle;
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: rowIndex))
+        ..value = TextCellValue(order.comments ?? '')
+        ..cellStyle = nameStyle;
+
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 9, rowIndex: rowIndex))
         ..value = DoubleCellValue(order.totalAmount)
         ..cellStyle = dataStyle;
 
       // #Veg Count
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 7, rowIndex: rowIndex))
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 10, rowIndex: rowIndex))
         ..value = IntCellValue(order.items.length)
         ..cellStyle = dataStyle;
 
@@ -128,7 +143,7 @@ class ExcelExportService {
           totalWeight += item.orderedQuantity;
         }
       }
-      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 8, rowIndex: rowIndex))
+      sheet.cell(CellIndex.indexByColumnRow(columnIndex: 11, rowIndex: rowIndex))
         ..value = DoubleCellValue(totalWeight)
         ..cellStyle = dataStyle;
 
@@ -155,12 +170,14 @@ class ExcelExportService {
     // 4. Set column widths
     sheet.setColumnWidth(0, 36); // Order ID
     sheet.setColumnWidth(1, 25); // Customer Name
-    sheet.setColumnWidth(2, 20); // Date
-    sheet.setColumnWidth(3, 20); // Area
-    sheet.setColumnWidth(4, 25); // Landmark
-    sheet.setColumnWidth(5, 18); // Amount
-    sheet.setColumnWidth(6, 14); // #Veg Count
-    sheet.setColumnWidth(7, 18); // Total Weight (kg)
+    sheet.setColumnWidth(2, 20); // Phone
+    sheet.setColumnWidth(3, 20); // Order Date
+    sheet.setColumnWidth(4, 20); // Area
+    sheet.setColumnWidth(5, 25); // Landmark
+    sheet.setColumnWidth(6, 30); // Comments
+    sheet.setColumnWidth(7, 18); // Total Amount
+    sheet.setColumnWidth(8, 14); // #Veg Count
+    sheet.setColumnWidth(9, 18); // Total Weight (kg)
     
     for (var p = 0; p < allProducts.length; p++) {
       sheet.setColumnWidth(metadataHeaders.length + p, 15);

@@ -136,9 +136,6 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
           };
         }
 
-        final screenWidth = MediaQuery.of(context).size.width;
-        final isNarrow = screenWidth < 800;
-
         return CallbackShortcuts(
           bindings: <ShortcutActivator, VoidCallback>{
             const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
@@ -156,188 +153,11 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
             autofocus: true,
             child: Scaffold(
               appBar: AppBar(
-                toolbarHeight: isNarrow ? 60 : 66,
                 leading: IconButton(
                   icon: const Icon(Icons.menu),
                   onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
                 ),
-                titleSpacing: 0,
-                title: isNarrow
-                    ? Row(
-                        children: [
-                          // Mobile compact stepper
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.chevron_left, size: 20),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
-                                  onPressed: currentCustomerIndex > 0
-                                      ? () => setState(() => currentCustomerIndex--)
-                                      : null,
-                                ),
-                                Text(
-                                  '${currentCustomerIndex + 1}/${customers.length}',
-                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.chevron_right, size: 20),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
-                                  onPressed: currentCustomerIndex < customers.length - 1
-                                      ? () => setState(() => currentCustomerIndex++)
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              currentOrder.customerName ?? 'Customer',
-                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          // Desktop/TV stepper
-                          Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.chevron_left, size: 22),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
-                                  tooltip: 'Previous Customer (←)',
-                                  onPressed: currentCustomerIndex > 0
-                                      ? () => setState(() => currentCustomerIndex--)
-                                      : null,
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  child: Text(
-                                    '${currentCustomerIndex + 1} of ${customers.length}',
-                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(Icons.chevron_right, size: 22),
-                                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
-                                  tooltip: 'Next Customer (→)',
-                                  onPressed: currentCustomerIndex < customers.length - 1
-                                      ? () => setState(() => currentCustomerIndex++)
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-
-                          // Customer details (Name, Area, Phone, Items count, Comments)
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Flexible(
-                                  child: Text(
-                                    currentOrder.customerName ?? 'Order #${currentOrder.id.substring(0, 8)}',
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.greenAccent,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                if (currentOrder.customerArea != null && currentOrder.customerArea!.isNotEmpty) ...[
-                                  const SizedBox(width: 10),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey[850],
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: Colors.grey[700]!),
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.location_on, size: 13, color: Colors.amber),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          currentOrder.customerArea!,
-                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                if (currentOrder.customerPhone != null && currentOrder.customerPhone!.isNotEmpty) ...[
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    currentOrder.customerPhone!,
-                                    style: TextStyle(fontSize: 13, color: Colors.grey[400]),
-                                  ),
-                                ],
-                                const SizedBox(width: 10),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    '${currentOrder.items.length} items',
-                                    style: TextStyle(fontSize: 11, color: Colors.grey[300], fontWeight: FontWeight.w500),
-                                  ),
-                                ),
-                                if (currentOrder.comments != null && currentOrder.comments!.isNotEmpty) ...[
-                                  const SizedBox(width: 8),
-                                  Tooltip(
-                                    message: currentOrder.comments!,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.withValues(alpha: 0.18),
-                                        borderRadius: BorderRadius.circular(4),
-                                        border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          const Icon(Icons.chat_bubble_outline, size: 11, color: Colors.blueAccent),
-                                          const SizedBox(width: 4),
-                                          ConstrainedBox(
-                                            constraints: const BoxConstraints(maxWidth: 140),
-                                            child: Text(
-                                              currentOrder.comments!,
-                                              style: const TextStyle(fontSize: 11, color: Colors.blueAccent),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                title: const Text('Packing Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                 actions: [
                   // Reset Button
                   OutlinedButton.icon(
@@ -407,115 +227,271 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
               ),
               body: Column(
                 children: [
-                  // Mobile sub-bar if narrow
-                  if (isNarrow)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      color: Colors.grey[900],
-                      child: Row(
-                        children: [
-                          if (currentOrder.customerArea != null && currentOrder.customerArea!.isNotEmpty) ...[
-                            Icon(Icons.location_on, size: 13, color: Colors.amber[300]),
-                            const SizedBox(width: 4),
-                            Text(currentOrder.customerArea!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  // Centered Minimal Customer & Stepper Block
+                  Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 780),
+                      child: Container(
+                        margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.04),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+                        ),
+                        child: Row(
+                          children: [
+                            // Left / Previous Customer Button
+                            IconButton.filledTonal(
+                              icon: const Icon(Icons.arrow_back_ios_new, size: 18),
+                              tooltip: 'Previous Customer (←)',
+                              onPressed: currentCustomerIndex > 0
+                                  ? () => setState(() => currentCustomerIndex--)
+                                  : null,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: Colors.white.withValues(alpha: 0.02),
+                                disabledForegroundColor: Colors.white24,
+                                minimumSize: const Size(42, 42),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
                             const SizedBox(width: 12),
-                          ],
-                          if (currentOrder.customerPhone != null && currentOrder.customerPhone!.isNotEmpty) ...[
-                            Icon(Icons.phone, size: 13, color: Colors.grey[400]),
-                            const SizedBox(width: 4),
-                            Text(currentOrder.customerPhone!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+
+                            // Centered Customer Details
+                            Expanded(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Stepper count & Order ID
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Order ${currentCustomerIndex + 1} of ${customers.length}',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[400],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '#${currentOrder.id.length > 8 ? currentOrder.id.substring(0, 8) : currentOrder.id}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey[600],
+                                          fontFamily: 'monospace',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+
+                                  // Customer Name (Bold Green)
+                                  Text(
+                                    currentOrder.customerName ?? 'Unknown Customer',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.greenAccent,
+                                      letterSpacing: 0.2,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+
+                                  // Details Badges: Area, Phone, Items count, Comments
+                                  Wrap(
+                                    alignment: WrapAlignment.center,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    spacing: 10,
+                                    runSpacing: 4,
+                                    children: [
+                                      if (currentOrder.customerArea != null && currentOrder.customerArea!.isNotEmpty)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.location_on, size: 14, color: Colors.amber[400]),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              currentOrder.customerArea!,
+                                              style: TextStyle(fontSize: 12.5, color: Colors.grey[300], fontWeight: FontWeight.w500),
+                                            ),
+                                          ],
+                                        ),
+                                      if (currentOrder.customerPhone != null && currentOrder.customerPhone!.isNotEmpty)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.phone, size: 13, color: Colors.blue[300]),
+                                            const SizedBox(width: 3),
+                                            Text(
+                                              currentOrder.customerPhone!,
+                                              style: TextStyle(fontSize: 12.5, color: Colors.grey[300]),
+                                            ),
+                                          ],
+                                        ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.08),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '${currentOrder.items.length} items',
+                                          style: TextStyle(fontSize: 11.5, color: Colors.grey[300], fontWeight: FontWeight.w600),
+                                        ),
+                                      ),
+                                      if (currentOrder.comments != null && currentOrder.comments!.isNotEmpty)
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(Icons.sticky_note_2_outlined, size: 13, color: Colors.orange[300]),
+                                            const SizedBox(width: 3),
+                                            ConstrainedBox(
+                                              constraints: const BoxConstraints(maxWidth: 220),
+                                              child: Text(
+                                                currentOrder.comments!,
+                                                style: TextStyle(fontSize: 12, color: Colors.orange[200], fontStyle: FontStyle.italic),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
                             const SizedBox(width: 12),
+
+                            // Right / Next Customer Button
+                            IconButton.filledTonal(
+                              icon: const Icon(Icons.arrow_forward_ios, size: 18),
+                              tooltip: 'Next Customer (→)',
+                              onPressed: currentCustomerIndex < customers.length - 1
+                                  ? () => setState(() => currentCustomerIndex++)
+                                  : null,
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.08),
+                                foregroundColor: Colors.white,
+                                disabledBackgroundColor: Colors.white.withValues(alpha: 0.02),
+                                disabledForegroundColor: Colors.white24,
+                                minimumSize: const Size(42, 42),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              ),
+                            ),
                           ],
-                          const Spacer(),
-                          Text('${currentOrder.items.length} items', style: TextStyle(fontSize: 12, color: Colors.grey[400])),
-                        ],
+                        ),
                       ),
                     ),
+                  ),
 
-                  // Items List / Grid
+                  // Items List / Grid (Centered, conditional 2-column)
                   Expanded(
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        // 2 columns on widescreen (TV / Laptop) when there are more than 3 items
-                        final useTwoColumns = constraints.maxWidth > 850 && currentOrder.items.length > 3;
+                        // Calculate available vertical height
+                        final availableHeight = constraints.maxHeight - 16;
+                        const rowHeight = 42.0;
+                        const rowSpacing = 6.0;
+                        const effectiveItemHeight = rowHeight + rowSpacing;
+                        final maxItemsInSingleColumn = (availableHeight / effectiveItemHeight).floor();
 
-                        return Padding(
-                          padding: EdgeInsets.symmetric(
-                            horizontal: constraints.maxWidth > 850 ? 24 : 12,
-                            vertical: 12,
+                        // Only use 2 columns if the items DO NOT fit vertically in a single column
+                        // AND screen width is wide enough (>= 750px)
+                        final useTwoColumns = constraints.maxWidth >= 750 &&
+                            currentOrder.items.length > maxItemsInSingleColumn;
+
+                        return Align(
+                          alignment: Alignment.topCenter,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: useTwoColumns ? 1300 : 780,
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 6,
+                              ),
+                              child: useTwoColumns
+                                  ? GridView.builder(
+                                      itemCount: currentOrder.items.length,
+                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        mainAxisExtent: rowHeight,
+                                        crossAxisSpacing: 14,
+                                        mainAxisSpacing: rowSpacing,
+                                      ),
+                                      itemBuilder: (context, index) {
+                                        final item = currentOrder.items[index];
+                                        final orderedQty = item.orderedQuantity;
+                                        final packedQty = packedQuantities[currentOrder.id]?[item.productId] ?? orderedQty.toDouble();
+                                        final isCompleted = completedItems[currentOrder.id]?.contains(item.productId) ?? false;
+
+                                        return PackingItemRow(
+                                          item: item,
+                                          orderedQty: orderedQty,
+                                          packedQty: packedQty,
+                                          isCompleted: isCompleted,
+                                          onToggleComplete: (val) {
+                                            setState(() {
+                                              completedItems.putIfAbsent(currentOrder.id, () => {});
+                                              if (val == true) {
+                                                completedItems[currentOrder.id]!.add(item.productId);
+                                              } else {
+                                                completedItems[currentOrder.id]!.remove(item.productId);
+                                              }
+                                            });
+                                          },
+                                          onQtyChanged: (val) {
+                                            setState(() {
+                                              packedQuantities[currentOrder.id]![item.productId] = val;
+                                            });
+                                            _debouncedSaveQty(currentOrder, item.productId, val);
+                                          },
+                                        );
+                                      },
+                                    )
+                                  : ListView.separated(
+                                      itemCount: currentOrder.items.length,
+                                      separatorBuilder: (context, index) => const SizedBox(height: rowSpacing),
+                                      itemBuilder: (context, index) {
+                                        final item = currentOrder.items[index];
+                                        final orderedQty = item.orderedQuantity;
+                                        final packedQty = packedQuantities[currentOrder.id]?[item.productId] ?? orderedQty.toDouble();
+                                        final isCompleted = completedItems[currentOrder.id]?.contains(item.productId) ?? false;
+
+                                        return PackingItemRow(
+                                          item: item,
+                                          orderedQty: orderedQty,
+                                          packedQty: packedQty,
+                                          isCompleted: isCompleted,
+                                          onToggleComplete: (val) {
+                                            setState(() {
+                                              completedItems.putIfAbsent(currentOrder.id, () => {});
+                                              if (val == true) {
+                                                completedItems[currentOrder.id]!.add(item.productId);
+                                              } else {
+                                                completedItems[currentOrder.id]!.remove(item.productId);
+                                              }
+                                            });
+                                          },
+                                          onQtyChanged: (val) {
+                                            setState(() {
+                                              packedQuantities[currentOrder.id]![item.productId] = val;
+                                            });
+                                            _debouncedSaveQty(currentOrder, item.productId, val);
+                                          },
+                                        );
+                                      },
+                                    ),
+                            ),
                           ),
-                          child: useTwoColumns
-                              ? GridView.builder(
-                                  itemCount: currentOrder.items.length,
-                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: 2,
-                                    mainAxisExtent: 52,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 8,
-                                  ),
-                                  itemBuilder: (context, index) {
-                                    final item = currentOrder.items[index];
-                                    final orderedQty = item.orderedQuantity;
-                                    final packedQty = packedQuantities[currentOrder.id]?[item.productId] ?? orderedQty.toDouble();
-                                    final isCompleted = completedItems[currentOrder.id]?.contains(item.productId) ?? false;
-
-                                    return PackingItemRow(
-                                      item: item,
-                                      orderedQty: orderedQty,
-                                      packedQty: packedQty,
-                                      isCompleted: isCompleted,
-                                      onToggleComplete: (val) {
-                                        setState(() {
-                                          completedItems.putIfAbsent(currentOrder.id, () => {});
-                                          if (val == true) {
-                                            completedItems[currentOrder.id]!.add(item.productId);
-                                          } else {
-                                            completedItems[currentOrder.id]!.remove(item.productId);
-                                          }
-                                        });
-                                      },
-                                      onQtyChanged: (val) {
-                                        setState(() {
-                                          packedQuantities[currentOrder.id]![item.productId] = val;
-                                        });
-                                        _debouncedSaveQty(currentOrder, item.productId, val);
-                                      },
-                                    );
-                                  },
-                                )
-                              : ListView.separated(
-                                  itemCount: currentOrder.items.length,
-                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                                  itemBuilder: (context, index) {
-                                    final item = currentOrder.items[index];
-                                    final orderedQty = item.orderedQuantity;
-                                    final packedQty = packedQuantities[currentOrder.id]?[item.productId] ?? orderedQty.toDouble();
-                                    final isCompleted = completedItems[currentOrder.id]?.contains(item.productId) ?? false;
-
-                                    return PackingItemRow(
-                                      item: item,
-                                      orderedQty: orderedQty,
-                                      packedQty: packedQty,
-                                      isCompleted: isCompleted,
-                                      onToggleComplete: (val) {
-                                        setState(() {
-                                          completedItems.putIfAbsent(currentOrder.id, () => {});
-                                          if (val == true) {
-                                            completedItems[currentOrder.id]!.add(item.productId);
-                                          } else {
-                                            completedItems[currentOrder.id]!.remove(item.productId);
-                                          }
-                                        });
-                                      },
-                                      onQtyChanged: (val) {
-                                        setState(() {
-                                          packedQuantities[currentOrder.id]![item.productId] = val;
-                                        });
-                                        _debouncedSaveQty(currentOrder, item.productId, val);
-                                      },
-                                    );
-                                  },
-                                ),
                         );
                       },
                     ),
@@ -607,7 +583,7 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                   constraints: const BoxConstraints(maxHeight: 150),
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.1),
+                    color: Colors.grey.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: ListView.builder(
@@ -812,28 +788,29 @@ class _PackingItemRowState extends State<PackingItemRow> {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(6),
         onTap: () => widget.onToggleComplete(!isCompleted),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(
             color: isCompleted
                 ? Colors.white.withValues(alpha: 0.02)
-                : Colors.white.withValues(alpha: 0.05),
-            borderRadius: BorderRadius.circular(8),
+                : Colors.white.withValues(alpha: 0.04),
+            borderRadius: BorderRadius.circular(6),
             border: Border.all(
               color: isCompleted
                   ? Colors.transparent
-                  : (isModified ? Colors.blue.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08)),
+                  : (isModified ? Colors.blue.withValues(alpha: 0.35) : Colors.white.withValues(alpha: 0.06)),
             ),
           ),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               // Checkbox
               SizedBox(
-                width: 22,
-                height: 22,
+                width: 20,
+                height: 20,
                 child: Checkbox(
                   value: isCompleted,
                   onChanged: widget.onToggleComplete,
@@ -841,69 +818,68 @@ class _PackingItemRowState extends State<PackingItemRow> {
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
 
               // Product Name
               Expanded(
                 child: Text(
                   widget.item.productName,
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w500,
                     decoration: isCompleted ? TextDecoration.lineThrough : null,
                     color: isCompleted ? Colors.grey[500] : Colors.white,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
 
-              // Ordered Pill
+              // Ordered Tag
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(5),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   'Ord: ${_formatQty(widget.orderedQty)} ${widget.item.unit}',
                   style: TextStyle(
                     color: isCompleted ? Colors.grey[500] : Colors.orange[300],
-                    fontSize: 13,
+                    fontSize: 12,
                     fontWeight: FontWeight.w600,
                     decoration: isCompleted ? TextDecoration.lineThrough : null,
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 8),
 
               // Packed Input Field
               Container(
-                width: 86,
-                height: 36,
+                width: 72,
+                height: 30,
                 decoration: BoxDecoration(
-                  color: Colors.black45,
+                  color: Colors.black38,
                   border: Border.all(
                     color: isModified ? Colors.blueAccent : Colors.grey[700]!,
                     width: isModified ? 1.5 : 1,
                   ),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(5),
                 ),
                 child: TextField(
                   controller: _controller,
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    fontSize: 15,
+                    fontSize: 13.5,
                     fontWeight: FontWeight.bold,
                     color: isCompleted ? Colors.grey[500] : (isModified ? Colors.blue[300] : Colors.white),
                   ),
                   decoration: InputDecoration(
                     isDense: true,
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 2, vertical: 6),
                     suffixText: widget.item.unit,
-                    suffixStyle: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                    suffixStyle: TextStyle(fontSize: 10.5, color: Colors.grey[500]),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   onChanged: (value) {
