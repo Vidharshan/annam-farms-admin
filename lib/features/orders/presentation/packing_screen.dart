@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import '../data/orders_repository.dart';
 import '../../../shared/domain/order_model.dart';
-import '../../../shared/domain/order_item.dart';
 import '../../../shared/services/excel_export_service.dart';
 import '../../../shared/services/excel_import_service.dart';
 import '../../../main.dart';
@@ -54,59 +51,61 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
   Widget build(BuildContext context) {
     final ordersAsync = ref.watch(allOrdersProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.menu),
-          onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
+    return ordersAsync.when(
+      loading: () => Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
+          ),
+          title: const Text('Packing Mode'),
         ),
-        title: const Text('Packing Mode'),
-        actions: [
-          // Download Packing Sheet
-          ordersAsync.whenOrNull(
-            data: (allOrders) {
-              final processingOrders = allOrders
-                  .where((o) => o.status == 'processing')
-                  .toList();
-              return IconButton(
-                icon: const Icon(Icons.file_download_outlined),
-                tooltip: 'Download Packing Sheet',
-                onPressed: processingOrders.isEmpty
-                    ? null
-                    : () => _downloadSheet(context, processingOrders),
-              );
-            },
-          ) ?? const SizedBox.shrink(),
-
-          // Upload Packing Sheet
-          IconButton(
-            icon: _isUploading
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.file_upload_outlined),
-            tooltip: 'Upload Packed Sheet',
-            onPressed: _isUploading ? null : () => _uploadSheet(context),
-          ),
-
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => ref.invalidate(allOrdersProvider),
-          ),
-          const SizedBox(width: 16),
-        ],
+        body: const Center(child: CircularProgressIndicator()),
       ),
-      body: ordersAsync.when(
-        data: (allOrders) {
-          // Get only processing orders
-          final processingOrders = allOrders
-              .where((o) => o.status == 'processing')
-              .toList();
+      error: (err, stack) => Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
+          ),
+          title: const Text('Packing Mode'),
+        ),
+        body: Center(child: Text('Error: $err')),
+      ),
+      data: (allOrders) {
+        // Get only processing orders
+        final processingOrders = allOrders
+            .where((o) => o.status == 'processing')
+            .toList();
 
-          if (processingOrders.isEmpty) {
-            return const Center(
+        if (processingOrders.isEmpty) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
+              ),
+              title: const Text('Packing Mode'),
+              actions: [
+                IconButton(
+                  icon: _isUploading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.file_upload_outlined),
+                  tooltip: 'Upload Packed Sheet',
+                  onPressed: _isUploading ? null : () => _uploadSheet(context),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () => ref.invalidate(allOrdersProvider),
+                ),
+                const SizedBox(width: 16),
+              ],
+            ),
+            body: const Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -117,232 +116,416 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                   Text('Move orders to "Processing" status first', style: TextStyle(color: Colors.grey)),
                 ],
               ),
-            );
-          }
+            ),
+          );
+        }
 
-          // Group orders by customer (user_id would be better, but using order ID for now)
-          // In a real app, you'd group by user_id
-          final customers = processingOrders;
+        final customers = processingOrders;
 
-          if (currentCustomerIndex >= customers.length) {
-            currentCustomerIndex = 0;
-          }
+        if (currentCustomerIndex >= customers.length) {
+          currentCustomerIndex = 0;
+        }
 
-          final currentOrder = customers[currentCustomerIndex];
+        final currentOrder = customers[currentCustomerIndex];
 
-          // Initialize packed quantities for this order
-          if (!packedQuantities.containsKey(currentOrder.id)) {
-            packedQuantities[currentOrder.id] = {
-              for (var item in currentOrder.items)
-                item.productId: item.deliveredQuantity?.toDouble() ?? item.orderedQuantity.toDouble()
-            };
-          }
+        // Initialize packed quantities for this order
+        if (!packedQuantities.containsKey(currentOrder.id)) {
+          packedQuantities[currentOrder.id] = {
+            for (var item in currentOrder.items)
+              item.productId: item.deliveredQuantity?.toDouble() ?? item.orderedQuantity.toDouble()
+          };
+        }
 
-          return Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
-              child: Column(
-                children: [
-                  // Navigation Header
-                  Container(
-                    color: Colors.grey[900],
-                    padding: const EdgeInsets.all(16),
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.arrow_back),
-                          onPressed: currentCustomerIndex > 0
-                              ? () => setState(() => currentCustomerIndex--)
-                              : null,
-                        ),
-                        Expanded(
-                          child: Column(
-                            children: [
-                              Text(
-                                'Order ${currentCustomerIndex + 1} of ${customers.length}',
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                              ),
-                              Text(
-                                'Order #${currentOrder.id.substring(0, 8)}',
-                                style: TextStyle(fontSize: 12, color: Colors.grey[400]),
-                              ),
-                            ],
+        final screenWidth = MediaQuery.of(context).size.width;
+        final isNarrow = screenWidth < 800;
+
+        return CallbackShortcuts(
+          bindings: <ShortcutActivator, VoidCallback>{
+            const SingleActivator(LogicalKeyboardKey.arrowLeft): () {
+              if (currentCustomerIndex > 0) {
+                setState(() => currentCustomerIndex--);
+              }
+            },
+            const SingleActivator(LogicalKeyboardKey.arrowRight): () {
+              if (currentCustomerIndex < customers.length - 1) {
+                setState(() => currentCustomerIndex++);
+              }
+            },
+          },
+          child: Focus(
+            autofocus: true,
+            child: Scaffold(
+              appBar: AppBar(
+                toolbarHeight: isNarrow ? 60 : 66,
+                leading: IconButton(
+                  icon: const Icon(Icons.menu),
+                  onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
+                ),
+                titleSpacing: 0,
+                title: isNarrow
+                    ? Row(
+                        children: [
+                          // Mobile compact stepper
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left, size: 20),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
+                                  onPressed: currentCustomerIndex > 0
+                                      ? () => setState(() => currentCustomerIndex--)
+                                      : null,
+                                ),
+                                Text(
+                                  '${currentCustomerIndex + 1}/${customers.length}',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_right, size: 20),
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
+                                  onPressed: currentCustomerIndex < customers.length - 1
+                                      ? () => setState(() => currentCustomerIndex++)
+                                      : null,
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.arrow_forward),
-                          onPressed: currentCustomerIndex < customers.length - 1
-                              ? () => setState(() => currentCustomerIndex++)
-                              : null,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  // Order Info & Customer Details
-                  Container(
-                    color: Colors.grey[850],
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    currentOrder.customerName ?? 'Unknown Customer',
-                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.green),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              currentOrder.customerName ?? 'Customer',
+                              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.greenAccent),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          // Desktop/TV stepper
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left, size: 22),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+                                  tooltip: 'Previous Customer (←)',
+                                  onPressed: currentCustomerIndex > 0
+                                      ? () => setState(() => currentCustomerIndex--)
+                                      : null,
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  child: Text(
+                                    '${currentCustomerIndex + 1} of ${customers.length}',
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
                                   ),
-                                  if (currentOrder.customerArea != null)
-                                    Text(
-                                      currentOrder.customerArea!,
-                                      style: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_right, size: 22),
+                                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                                  constraints: const BoxConstraints(minWidth: 32, minHeight: 36),
+                                  tooltip: 'Next Customer (→)',
+                                  onPressed: currentCustomerIndex < customers.length - 1
+                                      ? () => setState(() => currentCustomerIndex++)
+                                      : null,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+
+                          // Customer details (Name, Area, Phone, Items count, Comments)
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Flexible(
+                                  child: Text(
+                                    currentOrder.customerName ?? 'Order #${currentOrder.id.substring(0, 8)}',
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.greenAccent,
                                     ),
-                                ],
-                              ),
-                            ),
-                            Text(
-                              '₹${currentOrder.totalAmount.toStringAsFixed(2)}',
-                              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 24),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Created: ${DateFormat('MMM dd, hh:mm a').format(currentOrder.createdAt)}',
-                                    style: const TextStyle(fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Items: ${currentOrder.items.length}',
-                                    style: const TextStyle(fontSize: 12),
+                                ),
+                                if (currentOrder.customerArea != null && currentOrder.customerArea!.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: Colors.grey[850],
+                                      borderRadius: BorderRadius.circular(6),
+                                      border: Border.all(color: Colors.grey[700]!),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.location_on, size: 13, color: Colors.amber),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          currentOrder.customerArea!,
+                                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                                        ),
+                                      ],
+                                    ),
                                   ),
                                 ],
-                              ),
+                                if (currentOrder.customerPhone != null && currentOrder.customerPhone!.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    currentOrder.customerPhone!,
+                                    style: TextStyle(fontSize: 13, color: Colors.grey[400]),
+                                  ),
+                                ],
+                                const SizedBox(width: 10),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    '${currentOrder.items.length} items',
+                                    style: TextStyle(fontSize: 11, color: Colors.grey[300], fontWeight: FontWeight.w500),
+                                  ),
+                                ),
+                                if (currentOrder.comments != null && currentOrder.comments!.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Tooltip(
+                                    message: currentOrder.comments!,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.withValues(alpha: 0.18),
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.chat_bubble_outline, size: 11, color: Colors.blueAccent),
+                                          const SizedBox(width: 4),
+                                          ConstrainedBox(
+                                            constraints: const BoxConstraints(maxWidth: 140),
+                                            child: Text(
+                                              currentOrder.comments!,
+                                              style: const TextStyle(fontSize: 11, color: Colors.blueAccent),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            if (currentOrder.customerPhone != null)
-                              TextButton.icon(
-                                onPressed: () {}, // Could implement calling logic
-                                icon: const Icon(Icons.phone, size: 16),
-                                label: Text(currentOrder.customerPhone!),
-                                style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
-                              ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
+                actions: [
+                  // Reset Button
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      setState(() {
+                        packedQuantities[currentOrder.id] = {
+                          for (var item in currentOrder.items)
+                            item.productId: item.orderedQuantity.toDouble()
+                        };
+                        completedItems[currentOrder.id]?.clear();
+                      });
+                    },
+                    icon: const Icon(Icons.refresh, size: 15),
+                    label: const Text('Reset'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.grey[300],
+                      side: BorderSide(color: Colors.grey[700]!),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      visualDensity: VisualDensity.compact,
                     ),
                   ),
+                  const SizedBox(width: 8),
 
-                  // Items List
+                  // Mark as Packed Button
+                  ElevatedButton.icon(
+                    onPressed: () => _markAsPacked(context, currentOrder),
+                    icon: const Icon(Icons.check_circle, size: 16),
+                    label: const Text('Mark Packed', style: TextStyle(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[700],
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      visualDensity: VisualDensity.compact,
+                      elevation: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+
+                  // Download Packing Sheet
+                  IconButton(
+                    icon: const Icon(Icons.file_download_outlined),
+                    tooltip: 'Download Packing Sheet',
+                    onPressed: () => _downloadSheet(context, processingOrders),
+                  ),
+
+                  // Upload Packing Sheet
+                  IconButton(
+                    icon: _isUploading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          )
+                        : const Icon(Icons.file_upload_outlined),
+                    tooltip: 'Upload Packed Sheet',
+                    onPressed: _isUploading ? null : () => _uploadSheet(context),
+                  ),
+
+                  // Refresh
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refresh Orders',
+                    onPressed: () => ref.invalidate(allOrdersProvider),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              ),
+              body: Column(
+                children: [
+                  // Mobile sub-bar if narrow
+                  if (isNarrow)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                      color: Colors.grey[900],
+                      child: Row(
+                        children: [
+                          if (currentOrder.customerArea != null && currentOrder.customerArea!.isNotEmpty) ...[
+                            Icon(Icons.location_on, size: 13, color: Colors.amber[300]),
+                            const SizedBox(width: 4),
+                            Text(currentOrder.customerArea!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            const SizedBox(width: 12),
+                          ],
+                          if (currentOrder.customerPhone != null && currentOrder.customerPhone!.isNotEmpty) ...[
+                            Icon(Icons.phone, size: 13, color: Colors.grey[400]),
+                            const SizedBox(width: 4),
+                            Text(currentOrder.customerPhone!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            const SizedBox(width: 12),
+                          ],
+                          const Spacer(),
+                          Text('${currentOrder.items.length} items', style: TextStyle(fontSize: 12, color: Colors.grey[400])),
+                        ],
+                      ),
+                    ),
+
+                  // Items List / Grid
                   Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      itemCount: currentOrder.items.length,
-                      itemBuilder: (context, index) {
-                        final item = currentOrder.items[index];
-                        final orderedQty = item.orderedQuantity;
-                        final packedQty = packedQuantities[currentOrder.id]![item.productId]!;
-                        
-                        // Initialize completed items set for this order
-                        if (!completedItems.containsKey(currentOrder.id)) {
-                          completedItems[currentOrder.id] = {};
-                        }
-                        final isCompleted = completedItems[currentOrder.id]!.contains(item.productId);
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        // 2 columns on widescreen (TV / Laptop) when there are more than 3 items
+                        final useTwoColumns = constraints.maxWidth > 850 && currentOrder.items.length > 3;
 
-                        return PackingItemCard(
-                          item: item,
-                          orderedQty: orderedQty,
-                          packedQty: packedQty,
-                          isCompleted: isCompleted,
-                          onToggleComplete: (val) {
-                            setState(() {
-                              if (val == true) {
-                                completedItems[currentOrder.id]!.add(item.productId);
-                              } else {
-                                completedItems[currentOrder.id]!.remove(item.productId);
-                              }
-                            });
-                          },
-                          onQtyChanged: (val) {
-                            setState(() {
-                              packedQuantities[currentOrder.id]![item.productId] = val;
-                            });
-                            _debouncedSaveQty(currentOrder, item.productId, val);
-                          },
+                        return Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: constraints.maxWidth > 850 ? 24 : 12,
+                            vertical: 12,
+                          ),
+                          child: useTwoColumns
+                              ? GridView.builder(
+                                  itemCount: currentOrder.items.length,
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 2,
+                                    mainAxisExtent: 52,
+                                    crossAxisSpacing: 16,
+                                    mainAxisSpacing: 8,
+                                  ),
+                                  itemBuilder: (context, index) {
+                                    final item = currentOrder.items[index];
+                                    final orderedQty = item.orderedQuantity;
+                                    final packedQty = packedQuantities[currentOrder.id]?[item.productId] ?? orderedQty.toDouble();
+                                    final isCompleted = completedItems[currentOrder.id]?.contains(item.productId) ?? false;
+
+                                    return PackingItemRow(
+                                      item: item,
+                                      orderedQty: orderedQty,
+                                      packedQty: packedQty,
+                                      isCompleted: isCompleted,
+                                      onToggleComplete: (val) {
+                                        setState(() {
+                                          completedItems.putIfAbsent(currentOrder.id, () => {});
+                                          if (val == true) {
+                                            completedItems[currentOrder.id]!.add(item.productId);
+                                          } else {
+                                            completedItems[currentOrder.id]!.remove(item.productId);
+                                          }
+                                        });
+                                      },
+                                      onQtyChanged: (val) {
+                                        setState(() {
+                                          packedQuantities[currentOrder.id]![item.productId] = val;
+                                        });
+                                        _debouncedSaveQty(currentOrder, item.productId, val);
+                                      },
+                                    );
+                                  },
+                                )
+                              : ListView.separated(
+                                  itemCount: currentOrder.items.length,
+                                  separatorBuilder: (context, index) => const SizedBox(height: 8),
+                                  itemBuilder: (context, index) {
+                                    final item = currentOrder.items[index];
+                                    final orderedQty = item.orderedQuantity;
+                                    final packedQty = packedQuantities[currentOrder.id]?[item.productId] ?? orderedQty.toDouble();
+                                    final isCompleted = completedItems[currentOrder.id]?.contains(item.productId) ?? false;
+
+                                    return PackingItemRow(
+                                      item: item,
+                                      orderedQty: orderedQty,
+                                      packedQty: packedQty,
+                                      isCompleted: isCompleted,
+                                      onToggleComplete: (val) {
+                                        setState(() {
+                                          completedItems.putIfAbsent(currentOrder.id, () => {});
+                                          if (val == true) {
+                                            completedItems[currentOrder.id]!.add(item.productId);
+                                          } else {
+                                            completedItems[currentOrder.id]!.remove(item.productId);
+                                          }
+                                        });
+                                      },
+                                      onQtyChanged: (val) {
+                                        setState(() {
+                                          packedQuantities[currentOrder.id]![item.productId] = val;
+                                        });
+                                        _debouncedSaveQty(currentOrder, item.productId, val);
+                                      },
+                                    );
+                                  },
+                                ),
                         );
                       },
-                    ),
-                  ),
-
-                  // Action Buttons
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[900],
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.3),
-                          blurRadius: 8,
-                          offset: const Offset(0, -2),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            onPressed: () {
-                              // Reset to ordered quantities
-                              setState(() {
-                                packedQuantities[currentOrder.id] = {
-                                  for (var item in currentOrder.items)
-                                    item.productId: item.orderedQuantity.toDouble()
-                                };
-                              });
-                            },
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Reset'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: Colors.white,
-                              foregroundColor: Colors.black,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          flex: 2,
-                          child: ElevatedButton.icon(
-                            onPressed: () => _markAsPacked(context, currentOrder),
-                            icon: const Icon(Icons.check_circle),
-                            label: const Text('Mark as Packed'),
-                            style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 16),
-                              backgroundColor: Colors.green,
-                              foregroundColor: Colors.white,
-                              elevation: 2,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, stack) => Center(child: Text('Error: $err')),
-      ),
+          ),
+        );
+      },
     );
   }
 
@@ -566,7 +749,7 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
   }
 }
 
-class PackingItemCard extends StatefulWidget {
+class PackingItemRow extends StatefulWidget {
   final OrderItem item;
   final double orderedQty;
   final double packedQty;
@@ -574,7 +757,7 @@ class PackingItemCard extends StatefulWidget {
   final ValueChanged<bool?> onToggleComplete;
   final ValueChanged<double> onQtyChanged;
 
-  const PackingItemCard({
+  const PackingItemRow({
     super.key,
     required this.item,
     required this.orderedQty,
@@ -585,10 +768,10 @@ class PackingItemCard extends StatefulWidget {
   });
 
   @override
-  State<PackingItemCard> createState() => _PackingItemCardState();
+  State<PackingItemRow> createState() => _PackingItemRowState();
 }
 
-class _PackingItemCardState extends State<PackingItemCard> {
+class _PackingItemRowState extends State<PackingItemRow> {
   late TextEditingController _controller;
 
   @override
@@ -598,7 +781,7 @@ class _PackingItemCardState extends State<PackingItemCard> {
   }
 
   @override
-  void didUpdateWidget(covariant PackingItemCard oldWidget) {
+  void didUpdateWidget(covariant PackingItemRow oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.packedQty != oldWidget.packedQty) {
       final currentVal = double.tryParse(_controller.text);
@@ -623,154 +806,121 @@ class _PackingItemCardState extends State<PackingItemCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. Checkbox
-                SizedBox(
-                  width: 24,
-                  height: 24,
-                  child: Checkbox(
-                    value: widget.isCompleted,
-                    onChanged: widget.onToggleComplete,
-                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                
-                // 2. Main content area (Product Name, Price, and Ordered Qty)
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Product Name (full width)
-                      Text(
-                        widget.item.productName,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          decoration: widget.isCompleted ? TextDecoration.lineThrough : null,
-                          color: widget.isCompleted ? Colors.grey : null,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      
-                      // Price and Ordered Pill on second line
-                      Wrap(
-                        alignment: WrapAlignment.spaceBetween,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          Text(
-                            '₹${widget.item.pricePerUnit} / ${widget.item.unit}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey[400],
-                              decoration: widget.isCompleted ? TextDecoration.lineThrough : null,
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.orange.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(6),
-                            ),
-                            child: Text(
-                              'Ordered: ${widget.orderedQty} ${widget.item.unit}',
-                              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.orange),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            
-            const SizedBox(height: 16),
-            const Divider(color: Colors.white10, height: 1),
-            const SizedBox(height: 16),
-            
-            // 3. Packed Qty Input Area
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Packed Qty:', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.grey)),
-                Container(
-                  decoration: BoxDecoration(
-                    color: Colors.black26,
-                    border: Border.all(color: Colors.grey[700]!),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: SizedBox(
-                    width: 100,
-                    height: 40,
-                    child: TextField(
-                      controller: _controller,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        border: InputBorder.none,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        suffixText: widget.item.unit,
-                        suffixStyle: TextStyle(fontSize: 13, color: Colors.grey[500]),
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      onChanged: (value) {
-                         // Allow empty or just decimal point
-                        if (value.isEmpty) return;
-                        if (value == '.') return;
+    final isModified = widget.packedQty != widget.orderedQty;
+    final isCompleted = widget.isCompleted;
 
-                        // Regex to validate max 2 decimal places
-                        if (!RegExp(r'^\d*\.?\d{0,2}$').hasMatch(value)) {
-                           return;
-                        }
-
-                        final qty = double.tryParse(value);
-                        if (qty != null && qty >= 0) {
-                          widget.onQtyChanged(qty);
-                        }
-                      },
-                    ),
-                  ),
-                ),
-              ],
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: () => widget.onToggleComplete(!isCompleted),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: isCompleted
+                ? Colors.white.withValues(alpha: 0.02)
+                : Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(
+              color: isCompleted
+                  ? Colors.transparent
+                  : (isModified ? Colors.blue.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.08)),
             ),
-            if (widget.packedQty != widget.orderedQty)
-              Padding(
-                padding: const EdgeInsets.only(top: 12.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Modified (Ordered: ${widget.orderedQty.toStringAsFixed(0)} ${widget.item.unit})',
-                        style: TextStyle(color: Colors.blue[300], fontSize: 12, fontStyle: FontStyle.italic),
-                      ),
-                    ),
-                  ],
+          ),
+          child: Row(
+            children: [
+              // Checkbox
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: Checkbox(
+                  value: isCompleted,
+                  onChanged: widget.onToggleComplete,
+                  activeColor: Colors.green,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
               ),
-          ],
+              const SizedBox(width: 12),
+
+              // Product Name
+              Expanded(
+                child: Text(
+                  widget.item.productName,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                    color: isCompleted ? Colors.grey[500] : Colors.white,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Ordered Pill
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(5),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  'Ord: ${_formatQty(widget.orderedQty)} ${widget.item.unit}',
+                  style: TextStyle(
+                    color: isCompleted ? Colors.grey[500] : Colors.orange[300],
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Packed Input Field
+              Container(
+                width: 86,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  border: Border.all(
+                    color: isModified ? Colors.blueAccent : Colors.grey[700]!,
+                    width: isModified ? 1.5 : 1,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: TextField(
+                  controller: _controller,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: isCompleted ? Colors.grey[500] : (isModified ? Colors.blue[300] : Colors.white),
+                  ),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+                    suffixText: widget.item.unit,
+                    suffixStyle: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  onChanged: (value) {
+                    if (value.isEmpty || value == '.') return;
+                    if (!RegExp(r'^\d*\.?\d{0,2}$').hasMatch(value)) return;
+                    final qty = double.tryParse(value);
+                    if (qty != null && qty >= 0) {
+                      widget.onQtyChanged(qty);
+                    }
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 }
+
