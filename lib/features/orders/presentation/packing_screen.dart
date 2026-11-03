@@ -18,6 +18,7 @@ class PackingScreen extends ConsumerStatefulWidget {
 
 class _PackingScreenState extends ConsumerState<PackingScreen> {
   int currentCustomerIndex = 0;
+  int? selectedRouteNo; // null = All Routes, -1 = No Route
   Map<String, Map<String, double>> packedQuantities = {};
   Map<String, Set<String>> completedItems = {}; // Track completed items per order
   bool _isUploading = false;
@@ -73,12 +74,12 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
         body: Center(child: Text('Error: $err')),
       ),
       data: (allOrders) {
-        // Get only processing orders
-        final processingOrders = allOrders
+        // Get all processing orders
+        final allProcessingOrders = allOrders
             .where((o) => o.status == 'processing')
             .toList();
 
-        if (processingOrders.isEmpty) {
+        if (allProcessingOrders.isEmpty) {
           return Scaffold(
             appBar: AppBar(
               leading: IconButton(
@@ -120,7 +121,59 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
           );
         }
 
-        final customers = processingOrders;
+        // Available routes
+        final availableRoutes = allProcessingOrders
+            .map((o) => o.routeNo)
+            .whereType<int>()
+            .toSet()
+            .toList()
+          ..sort();
+        final hasUnassignedRoutes = allProcessingOrders.any((o) => o.routeNo == null);
+
+        // Filter customers by selected route
+        final customers = allProcessingOrders.where((o) {
+          if (selectedRouteNo == null) return true;
+          if (selectedRouteNo == -1) return o.routeNo == null;
+          return o.routeNo == selectedRouteNo;
+        }).toList();
+
+        if (customers.isEmpty) {
+          return Scaffold(
+            appBar: AppBar(
+              leading: IconButton(
+                icon: const Icon(Icons.menu),
+                onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
+              ),
+              title: const Text('Packing Mode'),
+            ),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.route, size: 56, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    selectedRouteNo == -1
+                        ? 'No orders without an assigned route'
+                        : 'No orders found for Route #$selectedRouteNo',
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.clear, size: 16),
+                    label: const Text('Show All Routes'),
+                    onPressed: () {
+                      setState(() {
+                        selectedRouteNo = null;
+                        currentCustomerIndex = 0;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
 
         if (currentCustomerIndex >= customers.length) {
           currentCustomerIndex = 0;
@@ -157,7 +210,54 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                   icon: const Icon(Icons.menu),
                   onPressed: () => adminScaffoldKey.currentState?.openDrawer(),
                 ),
-                title: const Text('Packing Mode', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                title: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text('Packing', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17)),
+                    if (availableRoutes.isNotEmpty || hasUnassignedRoutes) ...[
+                      const SizedBox(width: 10),
+                      Container(
+                        height: 32,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.white24),
+                        ),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int?>(
+                            value: selectedRouteNo,
+                            isDense: true,
+                            dropdownColor: Colors.grey[900],
+                            icon: const Icon(Icons.arrow_drop_down, color: Colors.cyanAccent, size: 20),
+                            style: const TextStyle(fontSize: 12.5, color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                            items: [
+                              const DropdownMenuItem<int?>(
+                                value: null,
+                                child: Text('All Routes', style: TextStyle(color: Colors.white)),
+                              ),
+                              ...availableRoutes.map((r) => DropdownMenuItem<int?>(
+                                value: r,
+                                child: Text('Route #$r', style: const TextStyle(color: Colors.cyanAccent)),
+                              )),
+                              if (hasUnassignedRoutes)
+                                const DropdownMenuItem<int?>(
+                                  value: -1,
+                                  child: Text('No Route', style: TextStyle(color: Colors.orangeAccent)),
+                                ),
+                            ],
+                            onChanged: (val) {
+                              setState(() {
+                                selectedRouteNo = val;
+                                currentCustomerIndex = 0;
+                              });
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 actions: [
                   // Reset Button
                   OutlinedButton.icon(
@@ -200,7 +300,7 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                   IconButton(
                     icon: const Icon(Icons.file_download_outlined),
                     tooltip: 'Download Packing Sheet',
-                    onPressed: () => _downloadSheet(context, processingOrders),
+                    onPressed: () => _downloadSheet(context, customers),
                   ),
 
                   // Upload Packing Sheet
@@ -230,7 +330,7 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                   // Centered Minimal Customer & Stepper Block
                   Center(
                     child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 780),
+                      constraints: const BoxConstraints(maxWidth: 580),
                       child: Container(
                         margin: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -304,13 +404,33 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                                   ),
                                   const SizedBox(height: 4),
 
-                                  // Details Badges: Area, Phone, Items count, Comments
+                                  // Details Badges: Route, Area, Phone, Items count, Comments
                                   Wrap(
                                     alignment: WrapAlignment.center,
                                     crossAxisAlignment: WrapCrossAlignment.center,
                                     spacing: 10,
                                     runSpacing: 4,
                                     children: [
+                                      if (currentOrder.routeNo != null)
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                          decoration: BoxDecoration(
+                                            color: Colors.cyan.withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(4),
+                                            border: Border.all(color: Colors.cyanAccent.withValues(alpha: 0.3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.alt_route, size: 12, color: Colors.cyanAccent),
+                                              const SizedBox(width: 3),
+                                              Text(
+                                                'Route #${currentOrder.routeNo}',
+                                                style: const TextStyle(fontSize: 11.5, color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
                                       if (currentOrder.customerArea != null && currentOrder.customerArea!.isNotEmpty)
                                         Row(
                                           mainAxisSize: MainAxisSize.min,
@@ -411,7 +531,7 @@ class _PackingScreenState extends ConsumerState<PackingScreen> {
                           alignment: Alignment.topCenter,
                           child: ConstrainedBox(
                             constraints: BoxConstraints(
-                              maxWidth: useTwoColumns ? 1300 : 780,
+                              maxWidth: useTwoColumns ? 1040 : 560,
                             ),
                             child: Padding(
                               padding: const EdgeInsets.symmetric(
@@ -833,28 +953,9 @@ class _PackingItemRowState extends State<PackingItemRow> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
-              const SizedBox(width: 10),
-
-              // Ordered Tag
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  'Ord: ${_formatQty(widget.orderedQty)} ${widget.item.unit}',
-                  style: TextStyle(
-                    color: isCompleted ? Colors.grey[500] : Colors.orange[300],
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    decoration: isCompleted ? TextDecoration.lineThrough : null,
-                  ),
-                ),
-              ),
               const SizedBox(width: 8),
 
-              // Packed Input Field
+              // Packed Input Field (The box is before ord:qty)
               Container(
                 width: 72,
                 height: 30,
@@ -890,6 +991,25 @@ class _PackingItemRowState extends State<PackingItemRow> {
                       widget.onQtyChanged(qty);
                     }
                   },
+                ),
+              ),
+              const SizedBox(width: 6),
+
+              // Ordered Tag
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'Ord: ${_formatQty(widget.orderedQty)} ${widget.item.unit}',
+                  style: TextStyle(
+                    color: isCompleted ? Colors.grey[500] : Colors.orange[300],
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    decoration: isCompleted ? TextDecoration.lineThrough : null,
+                  ),
                 ),
               ),
             ],

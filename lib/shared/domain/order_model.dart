@@ -17,6 +17,7 @@ class Order {
   final String? customerAddressLine2;
   final bool isArchived;
   final String? comments;
+  final int? routeNo;
   final List<OrderItem> items;
 
   Order({
@@ -35,6 +36,7 @@ class Order {
     this.customerAddressLine2,
     this.isArchived = false,
     this.comments,
+    this.routeNo,
     required this.items,
   });
 
@@ -56,6 +58,7 @@ class Order {
       customerAddressLine2: json['profiles']?['address_line2'],
       isArchived: json['is_archived'] ?? false,
       comments: json['comments'] as String?,
+      routeNo: (json['route_no'] ?? json['profiles']?['route_no']) as int?,
     );
   }
 }
